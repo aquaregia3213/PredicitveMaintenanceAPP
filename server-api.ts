@@ -3,9 +3,17 @@ import path from 'path';
 import type { IncomingMessage, ServerResponse } from 'http';
 
 function parseKeys() {
+  // Support cloud deployments via Environment Variables first
+  if (process.env.IBM_KEY && process.env.PUBLIC_ENDPOINT) {
+    return {
+      apiKey: process.env.IBM_KEY.trim(),
+      endpoint: process.env.PUBLIC_ENDPOINT.trim()
+    };
+  }
+
   const keysPath = path.join(process.cwd(), 'keys.txt');
   if (!fs.existsSync(keysPath)) {
-    throw new Error('keys.txt file is missing at root');
+    throw new Error('IBM credentials missing: Set IBM_KEY and PUBLIC_ENDPOINT env variables or create keys.txt at root');
   }
   const content = fs.readFileSync(keysPath, 'utf8');
   const keyMatch = content.match(/ibm key\s*-\s*([^\r\n]+)/);
