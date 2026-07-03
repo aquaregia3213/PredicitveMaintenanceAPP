@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { 
-  GraduationCap, Calendar, Award, Github, FileText, Download, 
+import {
+  GraduationCap, Calendar, Award, Github, FileText, Download,
   MapPin, CheckCircle, ChevronRight, Briefcase, FileCode, Presentation, X, Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function SipSubmissionView() {
   const [modalImage, setModalImage] = useState<{ title: string; image: string; url?: string } | null>(null);
-  
+
   // Custom student details matching User Email context (Madan Jadhav)
   const student = {
     name: 'Atharva Jadhav',
@@ -21,7 +21,7 @@ export default function SipSubmissionView() {
 
   const projectLinks = {
     github: 'https://github.com/aquaregia3213/Predictive_Maintenance_IBM',
-    ppt: '#', // Simulator download trigger
+    ppt: 'https://docs.google.com/presentation/d/1YZy53_oUUZo_THMd6eZ1myPRottzQEuC/edit?usp=sharing&ouid=103222535009742353780&rtpof=true&sd=true', // Simulator download trigger
   };
 
   // Week-wise Internship plan from PDF Page 5
@@ -96,21 +96,21 @@ export default function SipSubmissionView() {
 
   const itemVariants = {
     hidden: { opacity: 0, y: 12 },
-    show: { 
-      opacity: 1, 
-      y: 0, 
-      transition: { type: 'spring', stiffness: 300, damping: 28 } 
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: { type: 'spring', stiffness: 300, damping: 28 }
     }
   };
 
   return (
-    <motion.div 
+    <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="show"
       className="space-y-12"
     >
-      
+
       {/* Page Header */}
       <motion.div variants={itemVariants} className="border-b border-[#121212] dark:border-white/20 pb-6">
         <span className="inline-block text-[10px] font-mono uppercase tracking-widest font-bold text-[#121212] dark:text-white bg-[#121212]/5 dark:bg-white/10 px-3 py-1.5 rounded-none border border-[#121212] dark:border-white/30">
@@ -121,12 +121,12 @@ export default function SipSubmissionView() {
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
+
         {/* Left Column: Student Profile card */}
         <motion.div variants={itemVariants} className="lg:col-span-5 space-y-6">
-          
+
           <div className="bg-white dark:bg-zinc-900 p-6 border border-[#121212] dark:border-white/20 shadow-[4px_4px_0px_0px_#121212] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.1)] space-y-6 rounded-none relative overflow-hidden">
-            
+
             <div className="flex items-center gap-4">
               <div className="p-4 bg-[#F6F4F1] dark:bg-zinc-800 rounded-none border border-[#121212] dark:border-white/20 text-[#121212] dark:text-white">
                 <GraduationCap className="h-8 w-8" />
@@ -171,7 +171,7 @@ export default function SipSubmissionView() {
 
             {/* Action Cards / Links */}
             <div className="grid grid-cols-2 gap-3">
-              <motion.a 
+              <motion.a
                 href={projectLinks.github}
                 target="_blank"
                 rel="noreferrer"
@@ -183,15 +183,17 @@ export default function SipSubmissionView() {
                 <span className="text-xs font-bold text-[#121212] dark:text-white">GitHub Repo</span>
               </motion.a>
 
-              <motion.button
-                onClick={() => triggerDownload('Project PowerPoint')}
+              <motion.a 
+                href={projectLinks.ppt}
+                target="_blank"
+                rel="noreferrer"
                 whileHover={{ scale: 1.03, y: -1 }}
                 whileTap={{ scale: 0.97 }}
                 className="p-3 bg-white dark:bg-zinc-800 hover:bg-[#F6F4F1] dark:hover:bg-zinc-700 border border-[#121212] dark:border-white/20 shadow-[2px_2px_0px_0px_#121212] dark:shadow-[2px_2px_0px_0px_rgba(255,255,255,0.05)] rounded-none flex flex-col items-center justify-center text-center gap-2 transition-all cursor-pointer"
               >
                 <Presentation className="h-5 w-5 text-[#121212] dark:text-white" />
-                <span className="text-xs font-bold text-[#121212] dark:text-white">Download PPT</span>
-              </motion.button>
+                <span className="text-xs font-bold text-[#121212] dark:text-white">View PPT</span>
+              </motion.a>
             </div>
           </div>
 
@@ -204,8 +206,8 @@ export default function SipSubmissionView() {
 
             <div className="space-y-3">
               {certificates.map((cert, idx) => (
-                <motion.div 
-                  key={idx} 
+                <motion.div
+                  key={idx}
                   whileHover={{ x: 4 }}
                   onClick={() => setModalImage({ title: cert.title, image: cert.image, url: cert.url })}
                   className="p-4 rounded-none border border-[#121212] dark:border-white/20 bg-white dark:bg-zinc-900 text-[#121212] dark:text-white flex justify-between items-center shadow-[2px_2px_0px_0px_#121212] dark:shadow-[2px_2px_0px_0px_rgba(255,255,255,0.05)] cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
@@ -229,7 +231,7 @@ export default function SipSubmissionView() {
 
         {/* Right Column: Problem Statement & Delivery Timeline */}
         <motion.div variants={itemVariants} className="lg:col-span-7 space-y-6">
-          
+
           {/* Problem Statement Card */}
           <div className="bg-white dark:bg-zinc-900 p-6 border border-[#121212] dark:border-white/20 shadow-[4px_4px_0px_0px_#121212] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.1)] space-y-4 rounded-none">
             <div className="flex justify-between items-center border-b border-[#121212]/10 dark:border-white/10 pb-2">
@@ -237,7 +239,7 @@ export default function SipSubmissionView() {
                 <FileCode className="h-4.5 w-4.5 text-[#121212] dark:text-white" />
                 Problem Statement No.39
               </h3>
-              <button 
+              <button
                 onClick={() => setModalImage({ title: 'Problem Statement No.39 – Machine Learning Project Document', image: '/problem_statement.png' })}
                 className="text-[9px] font-mono uppercase bg-[#121212]/5 dark:bg-white/5 border border-[#121212]/20 dark:border-white/20 text-[#121212] dark:text-white px-2 py-1 rounded-none font-bold cursor-pointer hover:bg-[#121212]/10 dark:hover:bg-white/10 transition-colors flex items-center gap-1"
               >
@@ -245,7 +247,7 @@ export default function SipSubmissionView() {
                 View Original Sheet
               </button>
             </div>
-            
+
             <div className="space-y-3 text-[#121212]/80 dark:text-white/85 text-xs leading-relaxed font-sans">
               <p className="font-semibold text-sm font-serif border-l-2 border-[#121212] dark:border-white pl-2 py-0.5">
                 Mechanical Engineering: Predictive Maintenance of Industrial Machinery
@@ -255,10 +257,10 @@ export default function SipSubmissionView() {
               </p>
               <div className="pt-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-t border-[#121212]/10 dark:border-white/10 text-[10px] font-mono">
                 <span><strong>Technology:</strong> IBM Cloud lite services (Mandatory)</span>
-                <a 
-                  href="https://www.kaggle.com/datasets/shivamb/machine-predictive-maintenance-classification" 
-                  target="_blank" 
-                  rel="noreferrer" 
+                <a
+                  href="https://www.kaggle.com/datasets/shivamb/machine-predictive-maintenance-classification"
+                  target="_blank"
+                  rel="noreferrer"
                   className="underline font-bold text-[#121212] dark:text-white hover:opacity-80"
                 >
                   Kaggle Dataset Link →
@@ -274,7 +276,7 @@ export default function SipSubmissionView() {
                 <Briefcase className="h-4.5 w-4.5 text-[#121212] dark:text-white" />
                 Internship Week Plan
               </h3>
-              <button 
+              <button
                 onClick={() => setModalImage({ title: 'Internship Week-Wise Deliverable Plan Matrix', image: '/internship_plan_weeks.png' })}
                 className="text-[9px] font-mono uppercase bg-[#121212]/5 dark:bg-white/5 border border-[#121212]/20 dark:border-white/20 text-[#121212] dark:text-white px-2 py-1 rounded-none font-bold cursor-pointer hover:bg-[#121212]/10 dark:hover:bg-white/10 transition-colors flex items-center gap-1"
               >
@@ -290,7 +292,7 @@ export default function SipSubmissionView() {
                   <span className="absolute -left-9 top-1.5 h-6 w-6 rounded-none bg-white dark:bg-zinc-800 border border-[#121212] dark:border-white/20 flex items-center justify-center shadow-[1px_1px_0px_0px_#121212]">
                     <CheckCircle className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-500" />
                   </span>
-                  
+
                   <div className="space-y-1.5">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                       <h4 className="font-serif font-bold text-sm text-[#121212] dark:text-white">{step.title}</h4>
@@ -314,14 +316,14 @@ export default function SipSubmissionView() {
       {/* Visual Asset Lightbox Modal Overlay */}
       <AnimatePresence>
         {modalImage && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setModalImage(null)}
             className="fixed inset-0 z-50 bg-[#121212]/85 dark:bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out"
           >
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
@@ -330,8 +332,8 @@ export default function SipSubmissionView() {
             >
               <div className="flex justify-between items-center border-b border-[#121212]/10 dark:border-white/10 pb-2">
                 <h4 className="font-serif font-bold text-xs sm:text-sm md:text-base leading-tight">{modalImage.title}</h4>
-                <button 
-                  onClick={() => setModalImage(null)} 
+                <button
+                  onClick={() => setModalImage(null)}
                   className="font-mono text-[10px] uppercase font-bold border border-[#121212] dark:border-white/30 bg-[#121212]/5 dark:bg-white/5 hover:bg-[#121212]/10 dark:hover:bg-white/10 px-2.5 py-1.5 cursor-pointer flex items-center gap-1 rounded-none"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -339,18 +341,18 @@ export default function SipSubmissionView() {
                 </button>
               </div>
               <div className="border border-[#121212]/10 dark:border-white/10 overflow-hidden bg-[#F6F4F1] dark:bg-zinc-800 flex justify-center items-center p-2">
-                <img 
-                  src={modalImage.image} 
-                  alt={modalImage.title} 
-                  className="max-w-full h-auto object-contain max-h-[70vh] shadow-sm select-none" 
+                <img
+                  src={modalImage.image}
+                  alt={modalImage.title}
+                  className="max-w-full h-auto object-contain max-h-[70vh] shadow-sm select-none"
                 />
               </div>
               <div className="flex justify-between items-center text-[10px] font-mono border-t border-[#121212]/10 dark:border-white/10 pt-2">
                 {modalImage.url ? (
-                  <a 
-                    href={modalImage.url} 
-                    target="_blank" 
-                    rel="noreferrer" 
+                  <a
+                    href={modalImage.url}
+                    target="_blank"
+                    rel="noreferrer"
                     className="underline hover:text-[#121212]/70 dark:hover:text-white/70 font-bold flex items-center gap-1"
                   >
                     Verify Credly Badge →
