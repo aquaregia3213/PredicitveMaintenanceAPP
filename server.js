@@ -1,39 +1,22 @@
-var __create = Object.create;
-var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getProtoOf = Object.getPrototypeOf;
-var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __copyProps = (to, from, except, desc) => {
-  if (from && typeof from === "object" || typeof from === "function") {
-    for (let key of __getOwnPropNames(from))
-      if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-  }
-  return to;
-};
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-  // If the importer is in node compatibility mode or this is not an ESM
-  // file that has been converted to a CommonJS file using a Babel-
-  // compatible transform (i.e. "__esModule" has not been set), then set
-  // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-  mod
-));
-
 // server.ts
-var import_express = __toESM(require("express"), 1);
-var import_path2 = __toESM(require("path"), 1);
+import express from "express";
+import path2 from "path";
 
 // server-api.ts
-var import_fs = __toESM(require("fs"), 1);
-var import_path = __toESM(require("path"), 1);
+import fs from "fs";
+import path from "path";
 function parseKeys() {
-  const keysPath = import_path.default.join(process.cwd(), "keys.txt");
-  if (!import_fs.default.existsSync(keysPath)) {
-    throw new Error("keys.txt file is missing at root");
+  if (process.env.IBM_KEY && process.env.PUBLIC_ENDPOINT) {
+    return {
+      apiKey: process.env.IBM_KEY.trim(),
+      endpoint: process.env.PUBLIC_ENDPOINT.trim()
+    };
   }
-  const content = import_fs.default.readFileSync(keysPath, "utf8");
+  const keysPath = path.join(process.cwd(), "keys.txt");
+  if (!fs.existsSync(keysPath)) {
+    throw new Error("IBM credentials missing: Set IBM_KEY and PUBLIC_ENDPOINT env variables or create keys.txt at root");
+  }
+  const content = fs.readFileSync(keysPath, "utf8");
   const keyMatch = content.match(/ibm key\s*-\s*([^\r\n]+)/);
   const endpointMatch = content.match(/public endpoint\s*-\s*([^\r\n]+)/);
   if (!keyMatch || !endpointMatch) {
@@ -93,64 +76,48 @@ function sendJSON(res, status, data) {
   res.end(JSON.stringify(data));
 }
 function getAnalyticsData() {
-  const csvPath = import_path.default.join(process.cwd(), "Predictive_Maintenance", "assets", "data_asset", "predictive_maintenance.csv");
-  if (!import_fs.default.existsSync(csvPath)) {
-    throw new Error("predictive_maintenance.csv file not found");
-  }
-  const content = import_fs.default.readFileSync(csvPath, "utf8");
-  const lines = content.split("\n");
-  const headers = lines[0].split(",");
-  const typeIndex = headers.indexOf("Type");
-  const failureTypeIndex = headers.findIndex((h) => h.includes("Failure Type") || h.trim() === "Failure Type");
-  if (typeIndex === -1 || failureTypeIndex === -1) {
-    throw new Error("Type or Failure Type column not found in CSV");
-  }
-  const createStats = () => ({
-    total: 0,
-    normal: 0,
-    failures: 0,
-    hdf: 0,
-    pwf: 0,
-    twf: 0,
-    osf: 0,
-    rnf: 0
-  });
-  const stats = {
-    ALL: createStats(),
-    H: createStats(),
-    M: createStats(),
-    L: createStats()
-  };
-  const recordRow = (grade, failureType) => {
-    const inc = (s) => {
-      s.total++;
-      const cleaned = failureType.trim().toLowerCase();
-      if (cleaned === "no failure" || cleaned === "") {
-        s.normal++;
-      } else {
-        s.failures++;
-        if (cleaned.includes("heat dissipation")) s.hdf++;
-        else if (cleaned.includes("power")) s.pwf++;
-        else if (cleaned.includes("tool wear")) s.twf++;
-        else if (cleaned.includes("overstrain")) s.osf++;
-        else s.rnf++;
-      }
-    };
-    inc(stats.ALL);
-    if (stats[grade]) {
-      inc(stats[grade]);
+  return {
+    ALL: {
+      total: 1e4,
+      normal: 9652,
+      failures: 348,
+      hdf: 112,
+      pwf: 95,
+      twf: 45,
+      osf: 78,
+      rnf: 18
+    },
+    H: {
+      total: 1003,
+      normal: 979,
+      failures: 24,
+      hdf: 8,
+      pwf: 5,
+      twf: 6,
+      osf: 1,
+      rnf: 4
+    },
+    M: {
+      total: 2997,
+      normal: 2916,
+      failures: 81,
+      hdf: 30,
+      pwf: 31,
+      twf: 14,
+      osf: 4,
+      rnf: 2
+    },
+    L: {
+      total: 6e3,
+      normal: 5757,
+      failures: 243,
+      hdf: 74,
+      pwf: 59,
+      twf: 25,
+      osf: 73,
+      rnf: 12
     }
   };
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const cols = line.split(",");
-    if (cols.length <= Math.max(typeIndex, failureTypeIndex)) continue;
-    const grade = cols[typeIndex].trim();
-    const failureType = cols[failureTypeIndex];
-    recordRow(grade, failureType);
-  }
-  return stats;
 }
 async function predictHandler(req, res) {
   if (req.method !== "POST") {
@@ -168,9 +135,9 @@ async function predictHandler(req, res) {
     const power = torque * (rpm * 2 * Math.PI / 60);
     const overstrainFactor = toolWear * torque;
     const threshold = machineType === "H" ? 13e3 : machineType === "M" ? 12e3 : 11e3;
-    const isFailure = toolWear >= 220 || overstrainFactor > threshold || (power < 3500 || power > 9e3) || diffTemp < 8.6 && rpm < 1380;
+    const isFailure = toolWear >= 200 || overstrainFactor > threshold || (power < 3500 || power > 9e3) || diffTemp < 8.6 && rpm < 1380;
     const target = isFailure ? 1 : 0;
-    const udi = 1;
+    const udi = Math.floor(1 + Math.random() * 9999);
     const productId = `${machineType}${1e4 + Math.floor(Math.random() * 9e4)}`;
     const payload = {
       input_data: [
@@ -210,10 +177,6 @@ async function predictHandler(req, res) {
     }
     const predictedClass = predictData.predictions[0].values[0][0];
     const rawProbabilities = predictData.predictions[0].values[0][1];
-    let mappedPrediction = predictedClass;
-    if (mappedPrediction === "Random Failures") {
-      mappedPrediction = "Random Failure";
-    }
     const classes = [
       "Heat Dissipation Failure",
       "No Failure",
@@ -227,10 +190,11 @@ async function predictHandler(req, res) {
     if (classIndex !== -1 && Array.isArray(rawProbabilities)) {
       confidence = parseFloat((rawProbabilities[classIndex] * 100).toFixed(2));
     }
+    const roundedPower = Math.round(power);
     sendJSON(res, 200, {
-      prediction: mappedPrediction,
+      prediction: predictedClass,
       confidence,
-      calculatedPower: Math.round(power)
+      calculatedPower: roundedPower
     });
   } catch (err) {
     console.error("Prediction proxy error:", err);
@@ -251,19 +215,19 @@ async function analyticsHandler(req, res) {
 }
 
 // server.ts
-var app = (0, import_express.default)();
+var app = express();
 var PORT = process.env.PORT || 3e3;
-app.use(import_express.default.json());
+app.use(express.json());
 app.post("/api/predict", (req, res) => {
   predictHandler(req, res);
 });
 app.get("/api/analytics", (req, res) => {
   analyticsHandler(req, res);
 });
-var distPath = import_path2.default.join(process.cwd(), "dist");
-app.use(import_express.default.static(distPath));
+var distPath = path2.join(process.cwd(), "dist");
+app.use(express.static(distPath));
 app.get("*", (req, res) => {
-  res.sendFile(import_path2.default.join(distPath, "index.html"));
+  res.sendFile(path2.join(distPath, "index.html"));
 });
 app.listen(PORT, () => {
   console.log(`Production server running on port ${PORT}`);
