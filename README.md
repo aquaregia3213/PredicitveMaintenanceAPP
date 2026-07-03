@@ -1,6 +1,6 @@
-# SpindleCare: IBM watsonx.ai Predictive Maintenance Dashboard
+# PredictiX: IBM watsonx.ai Predictive Maintenance Dashboard
 
-SpindleCare is an AI-powered, real-time industrial telemetry monitoring and predictive maintenance system. Built on a 10,000-row CNC Spindle telemetry dataset, the application integrates a machine learning classifier deployed on **IBM watsonx.ai** (using IBM Cloud Watson Machine Learning REST APIs) to anticipate and classify spindle failures before they occur.
+PredictiX is an AI-powered, real-time industrial telemetry monitoring and predictive maintenance system. Built on a 10,000-row CNC Spindle telemetry dataset, the application integrates a machine learning classifier deployed on **IBM watsonx.ai** (using IBM Cloud Watson Machine Learning REST APIs) to anticipate and classify spindle failures before they occur.
 
 ---
 
