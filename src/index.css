@@ -1,0 +1,277 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+@import "tailwindcss";
+
+/* Tailwind v4: configure dark mode to use .dark class on parent element */
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", "Lora", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Playfair Display", serif;
+
+  --color-primary-500: #121212;
+  --color-primary-600: #1d1d1d;
+  --color-primary-700: #000000;
+  
+  --color-dark-950: #FDFCFB;
+  --color-dark-900: #F6F4F1;
+  --color-dark-800: #EFECE8;
+  --color-dark-700: #E4E0D9;
+  --color-dark-600: #D3CDBF;
+}
+
+/* Custom Editorial Aesthetic styling utilities */
+.glass-panel {
+  background: #FFFFFF;
+  border: 1px solid #121212;
+  box-shadow: 2px 2px 0px 0px #121212;
+}
+
+.glass-panel-hover {
+  transition: all 0.2s ease-in-out;
+}
+.glass-panel-hover:hover {
+  background: #FDFCFB;
+  border-color: #121212;
+  box-shadow: 4px 4px 0px 0px #121212;
+  transform: translate(-1px, -1px);
+}
+
+.blue-glow {
+  box-shadow: 3px 3px 0px 0px #121212;
+}
+
+.text-gradient {
+  color: #121212;
+}
+
+.text-gradient-blue {
+  color: #121212;
+}
+
+/* Custom input style */
+.editorial-input {
+  background: #FFFFFF;
+  border: 1px solid #121212;
+  color: #121212;
+}
+.editorial-input:focus {
+  outline: none;
+  border-width: 2px;
+}
+
+/* Custom progress bar */
+.editorial-progress {
+  background: #EFECE8;
+  border: 1px solid #121212;
+}
+.editorial-progress-fill {
+  background: #121212;
+}
+
+/* Hide scrollbars but keep functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Global utility overrides for Dark Theme */
+.dark {
+  /* Cards background */
+  .bg-white {
+    background-color: #18181b !important;
+  }
+  
+  /* Sidebar/Accent elements */
+  .bg-\[\#F6F4F1\] {
+    background-color: #27272a !important;
+  }
+  
+  /* Text colors */
+  .text-\[\#121212\] {
+    color: #f4f4f5 !important;
+  }
+  .text-\[\#121212\]\/90 {
+    color: rgba(244, 244, 245, 0.9) !important;
+  }
+  .text-\[\#121212\]\/80 {
+    color: rgba(244, 244, 245, 0.8) !important;
+  }
+  .text-\[\#121212\]\/70 {
+    color: rgba(244, 244, 245, 0.7) !important;
+  }
+  .text-\[\#121212\]\/60 {
+    color: rgba(244, 244, 245, 0.6) !important;
+  }
+  .text-\[\#121212\]\/50 {
+    color: rgba(244, 244, 245, 0.5) !important;
+  }
+  .text-\[\#121212\]\/40 {
+    color: rgba(244, 244, 245, 0.3) !important;
+  }
+  .text-slate-700 {
+    color: rgba(244, 244, 245, 0.8) !important;
+  }
+  
+  /* Borders */
+  .border-\[\#121212\] {
+    border-color: rgba(255, 255, 255, 0.2) !important;
+  }
+  .border-\[\#121212\]\/30 {
+    border-color: rgba(255, 255, 255, 0.12) !important;
+  }
+  .border-\[\#121212\]\/20 {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+  }
+  .border-\[\#121212\]\/15 {
+    border-color: rgba(255, 255, 255, 0.06) !important;
+  }
+  .border-\[\#121212\]\/10 {
+    border-color: rgba(255, 255, 255, 0.05) !important;
+  }
+  .divide-\[\#121212\]\/15 > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+  }
+  
+  /* Neobrutalist box shadows */
+  .shadow-\[4px_4px_0px_0px_\#121212\] {
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.4) !important;
+  }
+  .shadow-\[3px_3px_0px_0px_\#121212\] {
+    box-shadow: 3px 3px 0px 0px rgba(0, 0, 0, 0.4) !important;
+  }
+  .shadow-\[2px_2px_0px_0px_\#121212\] {
+    box-shadow: 2px 2px 0px 0px rgba(0, 0, 0, 0.4) !important;
+  }
+  
+  /* Hover effects */
+  .hover\:shadow-\[4px_4px_0px_0px_\#121212\]:hover {
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.5) !important;
+  }
+  .hover\:shadow-\[5px_5px_0px_0px_\#121212\]:hover {
+    box-shadow: 5px 5px 0px 0px rgba(0, 0, 0, 0.5) !important;
+  }
+  
+  /* Inputs */
+  .editorial-input {
+    background-color: #27272a !important;
+    color: #f4f4f5 !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+  }
+  
+  /* Slider tracks & background indicators */
+  input[type="range"] {
+    background-color: #27272a !important;
+  }
+  .bg-\[\#EFECE8\] {
+    background-color: #27272a !important;
+  }
+  
+  /* Callouts & Alert blocks (make them dark-themed) */
+  .bg-blue-50 {
+    background-color: rgba(30, 58, 138, 0.25) !important;
+    color: #93c5fd !important;
+    border-color: rgba(147, 197, 253, 0.3) !important;
+  }
+  .text-blue-950 {
+    color: #93c5fd !important;
+  }
+  .text-blue-950\/80 {
+    color: rgba(147, 197, 253, 0.8) !important;
+  }
+  .text-blue-800 {
+    color: #60a5fa !important;
+  }
+  
+  .bg-red-50 {
+    background-color: rgba(153, 27, 27, 0.25) !important;
+    color: #fca5a5 !important;
+    border-color: rgba(252, 165, 165, 0.3) !important;
+  }
+  .text-red-800 {
+    color: #f87171 !important;
+  }
+  .text-red-950 {
+    color: #fca5a5 !important;
+  }
+  .text-red-950\/80 {
+    color: rgba(252, 165, 165, 0.8) !important;
+  }
+  
+  .bg-emerald-50 {
+    background-color: rgba(6, 78, 59, 0.25) !important;
+    color: #6ee7b7 !important;
+    border-color: rgba(110, 231, 183, 0.3) !important;
+  }
+  .text-emerald-800 {
+    color: #34d399 !important;
+  }
+  .text-emerald-950 {
+    color: #6ee7b7 !important;
+  }
+  
+  .bg-amber-50 {
+    background-color: rgba(120, 53, 4, 0.25) !important;
+    color: #fcd34d !important;
+    border-color: rgba(252, 211, 77, 0.3) !important;
+  }
+  .text-amber-800 {
+    color: #fbbf24 !important;
+  }
+  
+  /* Tables & Confusion Matrix */
+  table {
+    border-color: rgba(255, 255, 255, 0.2) !important;
+  }
+  th, td {
+    border-color: rgba(255, 255, 255, 0.12) !important;
+  }
+  thead tr {
+    background-color: #27272a !important;
+  }
+  
+  /* Confusion matrix specific cells */
+  td.bg-emerald-700 {
+    background-color: #047857 !important;
+    color: #ffffff !important;
+  }
+  td.bg-emerald-100 {
+    background-color: rgba(52, 211, 153, 0.2) !important;
+    color: #34d399 !important;
+  }
+  td.bg-blue-50 {
+    background-color: rgba(59, 130, 246, 0.2) !important;
+    color: #60a5fa !important;
+  }
+  
+  /* Recharts custom CSS for dark mode axis and grids */
+  .recharts-cartesian-axis-line,
+  .recharts-cartesian-axis-tick line {
+    stroke: rgba(255, 255, 255, 0.2) !important;
+  }
+  .recharts-cartesian-axis-tick text {
+    fill: rgba(255, 255, 255, 0.6) !important;
+  }
+  .recharts-cartesian-grid line {
+    stroke: rgba(255, 255, 255, 0.08) !important;
+  }
+  .recharts-legend-item-text {
+    color: rgba(255, 255, 255, 0.8) !important;
+  }
+  .recharts-tooltip-cursor {
+    stroke: rgba(255, 255, 255, 0.15) !important;
+  }
+  .recharts-default-tooltip {
+    background-color: #18181b !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+  }
+  .recharts-tooltip-item {
+    color: #f4f4f5 !important;
+  }
+}
+
+
