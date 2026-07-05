@@ -2,7 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
-import {predictHandler, analyticsHandler} from './server-api';
+import {predictHandler, analyticsHandler, explainHandler} from './server-api';
 
 export default defineConfig(() => {
   return {
@@ -23,6 +23,19 @@ export default defineConfig(() => {
             req.on('end', () => {
               try { req.body = raw ? JSON.parse(raw) : {}; } catch { req.body = {}; }
               predictHandler(req, res);
+            });
+          });
+          server.middlewares.use('/api/explain', (req: any, res, next) => {
+            // Vite middleware: manually parse JSON body before forwarding to handler
+            if (req.body !== undefined) {
+              explainHandler(req, res);
+              return;
+            }
+            let raw = '';
+            req.on('data', (chunk: any) => { raw += chunk; });
+            req.on('end', () => {
+              try { req.body = raw ? JSON.parse(raw) : {}; } catch { req.body = {}; }
+              explainHandler(req, res);
             });
           });
           server.middlewares.use('/api/analytics', (req, res) => {

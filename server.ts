@@ -1,6 +1,6 @@
 import express from 'express';
 import path from 'path';
-import { predictHandler, analyticsHandler } from './server-api';
+import { predictHandler, analyticsHandler, explainHandler } from './server-api';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,6 +11,11 @@ app.use(express.json());
 // Mount the predict API route
 app.post('/api/predict', (req, res) => {
   predictHandler(req, res);
+});
+
+// Mount the explanation API route
+app.post('/api/explain', (req, res) => {
+  explainHandler(req, res);
 });
 
 // Mount the analytics dataset route

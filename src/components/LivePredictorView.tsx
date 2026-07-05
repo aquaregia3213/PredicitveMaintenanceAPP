@@ -4,7 +4,7 @@ import { SensorData, PredictionResult, FailureType } from '../types';
 import { 
   Play, RotateCcw, AlertCircle, CheckCircle2, AlertTriangle, 
   Trash2, Download, HelpCircle, Thermometer, ShieldCheck, 
-  Settings, Layers, Cpu, Database
+  Settings, Layers, Cpu, Database, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -34,6 +34,11 @@ export default function LivePredictorView({
   const [isDiagnosing, setIsDiagnosing] = useState(false);
   const [activePreset, setActivePreset] = useState<string>('normal');
   const [apiError, setApiError] = useState<string | null>(null);
+
+  // Gemini AI Assistant states
+  const [copilotLoading, setCopilotLoading] = useState(false);
+  const [copilotError, setCopilotError] = useState<string | null>(null);
+  const [copilotExplanation, setCopilotExplanation] = useState<string | null>(null);
 
   // Presets — values confirmed against live IBM watsonx.ai API (2026-07-02)
   // Each preset uses exact sensor values from real CSV rows for each failure class
@@ -137,6 +142,8 @@ export default function LivePredictorView({
   const executeDiagnosis = async () => {
     setIsDiagnosing(true);
     setApiError(null);
+    setCopilotExplanation(null);
+    setCopilotError(null);
     try {
       const response = await fetch('/api/predict', {
         method: 'POST',
@@ -174,6 +181,43 @@ export default function LivePredictorView({
       setApiError(err.message || 'An unknown error occurred while calling the prediction endpoint.');
     } finally {
       setIsDiagnosing(false);
+    }
+  };
+
+  const fetchExplanation = async () => {
+    if (!activeResult) return;
+    setCopilotLoading(true);
+    setCopilotError(null);
+    try {
+      const response = await fetch('/api/explain', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          machineType: activeResult.inputs.machineType,
+          airTemp: activeResult.inputs.airTemp,
+          processTemp: activeResult.inputs.processTemp,
+          rpm: activeResult.inputs.rpm,
+          torque: activeResult.inputs.torque,
+          toolWear: activeResult.inputs.toolWear,
+          prediction: activeResult.failurePrediction,
+          confidence: activeResult.confidence
+        })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to fetch explanation from Gemini API');
+      }
+
+      const data = await response.json();
+      setCopilotExplanation(data.explanation);
+    } catch (err: any) {
+      console.error('Explanation failed:', err);
+      setCopilotError(err.message || 'An error occurred while generating explanation.');
+    } finally {
+      setCopilotLoading(false);
     }
   };
 
@@ -730,11 +774,8 @@ export default function LivePredictorView({
               )}
             </motion.button>
 
-          </div>
-        </div>
-
-        {/* Right Hand: AI Diagnostic Outcome Panel */}
-        <div className="lg:col-span-5 flex flex-col justify-between">
+               {/* Right Hand: AI Diagnostic Outcome Panel */}
+        <div className="lg:col-span-5 flex flex-col space-y-6">
           
           <div className="bg-white p-6 border border-[#121212] shadow-[4px_4px_0px_0px_#121212] flex-1 flex flex-col justify-between overflow-hidden relative rounded-none">
             
@@ -751,7 +792,7 @@ export default function LivePredictorView({
                   <div className="p-4 bg-[#121212]/5 rounded-none border border-[#121212] animate-bounce">
                     <Cpu className="h-8 w-8 text-[#121212]" />
                   </div>
-            <div className="space-y-2 text-center">
+                  <div className="space-y-2 text-center">
                     <h4 className="font-serif font-bold text-lg text-[#121212] dark:text-white">Contacting watsonx.ai Endpoint</h4>
                     <p className="text-xs text-[#121212]/70 dark:text-white/50 max-w-xs leading-relaxed">
                       Querying AutoAI Pipeline 5 XGBoost Champion classifier. Please wait...
@@ -904,6 +945,99 @@ export default function LivePredictorView({
               </div>
             )}
           </div>
+
+          {activeResult && (
+            <div className="bg-white p-6 border border-[#121212] shadow-[4px_4px_0px_0px_#121212] rounded-none text-left flex flex-col space-y-4">
+              <div className="flex items-center justify-between border-b border-[#121212]/20 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-[#121212] text-white">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-mono uppercase text-[#121212]/60 tracking-wider block">AI Explainability</span>
+                    <h4 className="text-sm font-serif font-bold text-[#121212]">Gemini Maintenance Copilot</h4>
+                  </div>
+                </div>
+              </div>
+
+              {!copilotExplanation && !copilotLoading && !copilotError && (
+                <div className="space-y-4 py-2">
+                  <p className="text-xs text-[#121212]/70 leading-relaxed">
+                    Generate a detailed AI diagnostic report explaining root causes, step-by-step disassembly/repair checklists, and PPE safety guides customized to this machine state.
+                  </p>
+                  <button
+                    onClick={fetchExplanation}
+                    className="w-full py-3 bg-[#121212] text-white hover:bg-[#202020] font-bold font-mono text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-[#121212] shadow-[2px_2px_0px_0px_rgba(0,0,0,0.15)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,0.15)] transition-all rounded-none cursor-pointer"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 fill-white text-white" />
+                    <span>Generate Copilot Briefing</span>
+                  </button>
+                </div>
+              )}
+
+              {copilotLoading && (
+                <div className="flex flex-col items-center justify-center py-8 space-y-4 text-center">
+                  <span className="h-6 w-6 border-2 border-[#121212]/30 border-t-[#121212] rounded-full animate-spin" />
+                  <div className="space-y-1">
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#121212]">Gemini Synthesizing...</span>
+                    <p className="text-[10px] text-[#121212]/60 max-w-xs">
+                      Running diagnostic models and compiling disassembly guidelines.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {copilotError && (
+                <div className="space-y-3 py-2">
+                  <div className="p-3 bg-red-50 border border-red-800 text-red-800 text-xs font-mono leading-relaxed rounded-none">
+                    <div className="font-bold flex items-center gap-1.5">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      <span>COPI BRIEFING FAILED</span>
+                    </div>
+                    <p className="mt-1 text-[10px] opacity-90 leading-normal">{copilotError}</p>
+                  </div>
+                  
+                  {copilotError.includes('key') && (
+                    <div className="text-[10px] text-[#121212]/70 leading-relaxed bg-[#F6F4F1] p-3 border border-[#121212]/30">
+                      <span className="font-bold block uppercase mb-1">Configuration Guidelines:</span>
+                      1. Open the <a href="file:///C:/Users/Atharva%20Jadhav/OneDrive/Desktop/Clg%20stuff/SY/Internships/IBM/predictive-maintenance-dashboard/keys.txt" className="underline font-bold">[keys.txt]</a> file in the project root.<br />
+                      2. Edit the line: `gemini key - YOUR_GEMINI_API_KEY`<br />
+                      3. Replace `YOUR_GEMINI_API_KEY` with your actual Google AI API key.<br />
+                      4. Alternatively, set the `GEMINI_API_KEY` environment variable.
+                    </div>
+                  )}
+
+                  <button
+                    onClick={fetchExplanation}
+                    className="w-full py-2.5 border border-[#121212] bg-white text-[#121212] hover:bg-[#121212]/5 font-bold font-mono text-xs uppercase tracking-widest flex items-center justify-center gap-2 rounded-none cursor-pointer"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span>Retry Analysis</span>
+                  </button>
+                </div>
+              )}
+
+              {copilotExplanation && !copilotLoading && (
+                <div className="space-y-4">
+                  <div className="max-h-[350px] overflow-y-auto border border-[#121212]/20 p-4 bg-[#FDFCFB] rounded-none custom-scrollbar">
+                    <MarkdownRenderer text={copilotExplanation} />
+                  </div>
+
+                  <div className="flex gap-2.5 pt-2">
+                    <button
+                      onClick={fetchExplanation}
+                      className="flex-1 py-2.5 border border-[#121212] bg-white text-[#121212] hover:bg-[#121212]/5 font-bold font-mono text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 rounded-none cursor-pointer"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      <span>Regenerate Briefing</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>     </div>
         </div>
 
       </div>
@@ -1004,4 +1138,84 @@ export default function LivePredictorView({
 
     </motion.div>
   );
+}
+
+// Helper component to render simple markdown to JSX elements
+function MarkdownRenderer({ text }: { text: string }) {
+  const lines = text.split('\n');
+  return (
+    <div className="space-y-3 font-sans text-xs leading-relaxed text-[#121212]">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        
+        // Headers
+        if (trimmed.startsWith('### ')) {
+          return (
+            <h4 key={idx} className="font-serif font-bold text-xs text-[#121212] mt-4 border-b border-[#121212]/15 pb-1 uppercase tracking-wide">
+              {parseInlineMarkdown(trimmed.substring(4))}
+            </h4>
+          );
+        }
+        if (trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
+          const headerText = trimmed.startsWith('## ') ? trimmed.substring(3) : trimmed.substring(2);
+          return (
+            <h3 key={idx} className="font-serif font-bold text-sm text-[#121212] mt-5 border-l-2 border-[#121212] pl-2">
+              {parseInlineMarkdown(headerText)}
+            </h3>
+          );
+        }
+        
+        // Bullet points
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-2">
+              <span className="text-[#121212] font-bold mt-0.5">•</span>
+              <span>{parseInlineMarkdown(trimmed.substring(2))}</span>
+            </div>
+          );
+        }
+        
+        // Numbered list
+        const numMatch = trimmed.match(/^(\d+)\.\s(.*)/);
+        if (numMatch) {
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-2">
+              <span className="font-mono font-bold text-[#121212]">{numMatch[1]}.</span>
+              <span>{parseInlineMarkdown(numMatch[2])}</span>
+            </div>
+          );
+        }
+        
+        // Empty lines
+        if (trimmed === '') {
+          return <div key={idx} className="h-1" />;
+        }
+        
+        // Regular paragraph
+        return <p key={idx}>{parseInlineMarkdown(line)}</p>;
+      })}
+    </div>
+  );
+}
+
+// Simple inline parser for bold/italic/code strings
+function parseInlineMarkdown(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={index} className="font-bold text-[#121212]">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <code key={index} className="bg-[#121212]/5 text-[#121212] font-mono px-1.5 py-0.5 border border-[#121212]/15 text-[10px] uppercase font-bold">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return part;
+  });
 }

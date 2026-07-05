@@ -1,13 +1,19 @@
 import fs from 'fs';
 import path from 'path';
 import type { IncomingMessage, ServerResponse } from 'http';
+import { GoogleGenAI } from '@google/genai';
 
 function parseKeys() {
   // Support cloud deployments via Environment Variables first
-  if (process.env.IBM_KEY && process.env.PUBLIC_ENDPOINT) {
+  const ibmKeyEnv = process.env.IBM_KEY;
+  const publicEndpointEnv = process.env.PUBLIC_ENDPOINT;
+  const geminiKeyEnv = process.env.GEMINI_API_KEY;
+
+  if (ibmKeyEnv && publicEndpointEnv) {
     return {
-      apiKey: process.env.IBM_KEY.trim(),
-      endpoint: process.env.PUBLIC_ENDPOINT.trim()
+      apiKey: ibmKeyEnv.trim(),
+      endpoint: publicEndpointEnv.trim(),
+      geminiKey: geminiKeyEnv ? geminiKeyEnv.trim() : undefined
     };
   }
 
@@ -18,12 +24,15 @@ function parseKeys() {
   const content = fs.readFileSync(keysPath, 'utf8');
   const keyMatch = content.match(/ibm key\s*-\s*([^\r\n]+)/);
   const endpointMatch = content.match(/public endpoint\s*-\s*([^\r\n]+)/);
+  const geminiMatch = content.match(/gemini key\s*-\s*([^\r\n]+)/);
+
   if (!keyMatch || !endpointMatch) {
     throw new Error('keys.txt has invalid format');
   }
   return {
     apiKey: keyMatch[1].trim(),
-    endpoint: endpointMatch[1].trim()
+    endpoint: endpointMatch[1].trim(),
+    geminiKey: geminiMatch ? geminiMatch[1].trim() : (geminiKeyEnv ? geminiKeyEnv.trim() : undefined)
   };
 }
 
@@ -301,5 +310,99 @@ export async function analyticsHandler(req: IncomingMessage, res: ServerResponse
   } catch (err: any) {
     console.error('Analytics parsing error:', err);
     sendJSON(res, 500, { error: err.message || 'Internal server error' });
+  }
+}
+
+export async function explainHandler(req: IncomingMessage, res: ServerResponse) {
+  if (req.method !== 'POST') {
+    return sendJSON(res, 405, { error: 'Method not allowed' });
+  }
+
+  let body;
+  try {
+    body = await getBody(req);
+  } catch (err: any) {
+    return sendJSON(res, 400, { error: 'Invalid JSON in request body' });
+  }
+
+  const { machineType, airTemp, processTemp, rpm, torque, toolWear, prediction, confidence } = body;
+  if (
+    !machineType ||
+    airTemp === undefined ||
+    processTemp === undefined ||
+    rpm === undefined ||
+    torque === undefined ||
+    toolWear === undefined ||
+    !prediction ||
+    confidence === undefined
+  ) {
+    return sendJSON(res, 400, { error: 'Missing required sensor or prediction fields' });
+  }
+
+  // Get Gemini API key
+  let geminiKey: string | undefined;
+  try {
+    const keys = parseKeys();
+    geminiKey = keys.geminiKey;
+  } catch (err: any) {
+    // If keys.txt parsing failed or config error
+  }
+
+  // If not found in keys.txt, look at process.env.GEMINI_API_KEY
+  if (!geminiKey || geminiKey === 'YOUR_GEMINI_API_KEY') {
+    geminiKey = process.env.GEMINI_API_KEY;
+  }
+
+  if (!geminiKey) {
+    return sendJSON(res, 400, {
+      error: 'Gemini API key is not configured.',
+      details: 'Please set the GEMINI_API_KEY environment variable or add "gemini key - <your-key>" to keys.txt at the root of the project.'
+    });
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: geminiKey });
+    const diffTemp = (processTemp - airTemp).toFixed(1);
+    const power = Math.round(torque * (rpm * 2 * Math.PI / 60));
+
+    const prompt = `
+You are an expert industrial CNC maintenance and reliability engineer.
+Analyze the following CNC spindle telemetry readings and classification prediction to generate a comprehensive, highly actionable diagnostic and mitigation report.
+
+Spindle Telemetry Inputs:
+- Spindle Type: ${machineType} (${machineType === 'H' ? 'High Quality' : machineType === 'M' ? 'Medium Quality' : 'Low Quality'})
+- Air Temperature (Ambient): ${airTemp} K
+- Process Temperature: ${processTemp} K
+- Temperature Differential (ΔT): ${diffTemp} K
+- Rotational Speed: ${rpm} RPM
+- Torque: ${torque} Nm
+- Calculated Power: ${power} W
+- Cumulative Tool Wear: ${toolWear} minutes
+
+Model Prediction:
+- Status: ${prediction}
+- Model Confidence: ${confidence}%
+
+Provide your response in structured markdown with the following sections:
+1. **Telemetry Analysis**: Explain why this failure was predicted (or why the system is deemed healthy). Reference the standard operating boundaries (e.g. tool wear limit of 200 mins, power limit of 3500W-9000W, ΔT < 8.6 K and RPM < 1380, or the overstrain limit based on spindle type).
+2. **Immediate Mitigation Action**: Actionable step-by-step instructions for the operator on the shop floor to prevent damage or stabilize the spindle right now.
+3. **Root Cause Analysis (RCA)**: Describe potential physical causes (e.g., coolant failure, cutter dulling, high feed rate, spindle motor wear).
+4. **Maintenance & Disassembly Guide**: Technical repair instructions, safety gear needed (PPE), and tools required.
+5. **Next Inspection Schedule**: Recommended inspection intervals and telemetry check frequency.
+
+Be precise, highly technical yet readable for field operators, and keep the tone professional and authoritative.
+`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    });
+
+    const explanation = response.text;
+    return sendJSON(res, 200, { explanation });
+
+  } catch (err: any) {
+    console.error('Gemini explanation error:', err);
+    return sendJSON(res, 500, { error: `Gemini API error: ${err.message}` });
   }
 }
