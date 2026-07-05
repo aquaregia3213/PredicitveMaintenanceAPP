@@ -26,6 +26,8 @@ export interface PredictionResult {
   confidence: number; // Percentage, e.g. 98.4
   riskLevel: 'Low' | 'Medium' | 'High' | 'Critical';
   suggestedAction: string;
+  fallback?: boolean;
+  fallbackReason?: string;
 }
 
 export interface MetricStat {

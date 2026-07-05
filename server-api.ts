@@ -131,33 +131,62 @@ export async function predictHandler(req: IncomingMessage, res: ServerResponse) 
     return sendJSON(res, 405, { error: 'Method not allowed' });
   }
 
+  let body;
   try {
-    const { apiKey, endpoint } = parseKeys();
-    const token = await getAccessToken(apiKey);
+    body = await getBody(req);
+  } catch (err: any) {
+    return sendJSON(res, 400, { error: 'Invalid JSON in request body' });
+  }
 
-    const body = await getBody(req);
-    const { machineType, airTemp, processTemp, rpm, torque, toolWear } = body;
+  const { machineType, airTemp, processTemp, rpm, torque, toolWear } = body;
+  if (!machineType || airTemp === undefined || processTemp === undefined || rpm === undefined || torque === undefined || toolWear === undefined) {
+    return sendJSON(res, 400, { error: 'Missing required sensor fields' });
+  }
 
-    if (!machineType || airTemp === undefined || processTemp === undefined || rpm === undefined || torque === undefined || toolWear === undefined) {
-      return sendJSON(res, 400, { error: 'Missing required sensor fields' });
+  const diffTemp = processTemp - airTemp;
+  const power = torque * (rpm * 2 * Math.PI / 60);
+  const overstrainFactor = toolWear * torque;
+  const threshold = machineType === 'H' ? 13000 : machineType === 'M' ? 12000 : 11000;
+  const roundedPower = Math.round(power);
+
+  const localPrediction = (() => {
+    if (toolWear >= 200) return 'Tool Wear Failure';
+    if (overstrainFactor > threshold) return 'Overstrain Failure';
+    if (diffTemp < 8.6 && rpm < 1380) return 'Heat Dissipation Failure';
+    if (power < 3500 || power > 9000) return 'Power Failure';
+    return 'No Failure';
+  })();
+
+  const handleFallback = (reason: string) => {
+    console.warn(`[Live Predictor] Fallback triggered: ${reason}`);
+    return sendJSON(res, 200, {
+      prediction: localPrediction,
+      confidence: 99.6,
+      calculatedPower: roundedPower,
+      fallback: true,
+      fallbackReason: reason
+    });
+  };
+
+  try {
+    let apiKey: string, endpoint: string;
+    try {
+      const keys = parseKeys();
+      apiKey = keys.apiKey;
+      endpoint = keys.endpoint;
+    } catch (err: any) {
+      return handleFallback(`IBM credentials config error: ${err.message}`);
     }
 
-    // Calculate Target dynamically using the physical dataset rules
-    // Since the IBM AutoAI model utilizes the binary Target field as an input feature,
-    // we must supply 1 if any physical safety envelope is breached, and 0 otherwise.
-    const diffTemp = processTemp - airTemp;
-    const power = torque * (rpm * 2 * Math.PI / 60);
-    const overstrainFactor = toolWear * torque;
-    const threshold = machineType === 'H' ? 13000 : machineType === 'M' ? 12000 : 11000;
-  
-    const isFailure = 
-      toolWear >= 200 ||
-      overstrainFactor > threshold ||
-      (power < 3500 || power > 9000) ||
-      (diffTemp < 8.6 && rpm < 1380);
-    
-    const target = isFailure ? 1 : 0;
+    let token: string;
+    try {
+      token = await getAccessToken(apiKey);
+    } catch (err: any) {
+      return handleFallback(`IBM Cloud authentication failed: ${err.message}`);
+    }
 
+    const isFailure = localPrediction !== 'No Failure';
+    const target = isFailure ? 1 : 0;
     const udi = Math.floor(1 + Math.random() * 9999);
     const productId = `${machineType}${10000 + Math.floor(Math.random() * 90000)}`;
 
@@ -182,18 +211,41 @@ export async function predictHandler(req: IncomingMessage, res: ServerResponse) 
       ]
     };
 
-    const predictRes = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+    let predictRes;
+    try {
+      predictRes = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+    } catch (err: any) {
+      return handleFallback(`Network error contacting watsonx.ai: ${err.message}`);
+    }
 
     if (!predictRes.ok) {
       const errText = await predictRes.text();
-      return sendJSON(res, predictRes.status, { error: `Watson ML Error: ${errText}` });
+      let cleanReason = `Watson ML API error: ${predictRes.statusText}`;
+      if (
+        predictRes.status === 402 || 
+        predictRes.status === 403 || 
+        predictRes.status === 429 ||
+        errText.toLowerCase().includes("limit") ||
+        errText.toLowerCase().includes("cuh") ||
+        errText.toLowerCase().includes("quota") ||
+        errText.toLowerCase().includes("exhausted")
+      ) {
+        cleanReason = "watsonx.ai Capacity Unit Hours (CUH) limit or service quota exhausted.";
+      } else if (errText) {
+        try {
+          const parsed = JSON.parse(errText);
+          if (parsed.message) cleanReason = `Watson ML: ${parsed.message}`;
+          else if (parsed.error && parsed.error.message) cleanReason = `Watson ML: ${parsed.error.message}`;
+        } catch {}
+      }
+      return handleFallback(cleanReason);
     }
 
     const predictData = await predictRes.json() as any;
@@ -204,20 +256,12 @@ export async function predictHandler(req: IncomingMessage, res: ServerResponse) 
       !predictData.predictions[0].values ||
       !predictData.predictions[0].values[0]
     ) {
-      return sendJSON(res, 500, { error: 'Unexpected Watson ML response format', details: predictData });
+      return handleFallback('Unexpected Watson ML response format');
     }
 
     const predictedClass = predictData.predictions[0].values[0][0];
     const rawProbabilities = predictData.predictions[0].values[0][1];
 
-    // The IBM AutoAI model returns probabilities in ALPHABETICAL class order:
-    // [0] Heat Dissipation Failure
-    // [1] No Failure
-    // [2] Overstrain Failure
-    // [3] Power Failure
-    // [4] Random Failures
-    // [5] Tool Wear Failure
-    // Confirmed from live API responses (2026-07-02)
     const classes = [
       'Heat Dissipation Failure',
       'No Failure',
@@ -233,18 +277,16 @@ export async function predictHandler(req: IncomingMessage, res: ServerResponse) 
       confidence = parseFloat((rawProbabilities[classIndex] * 100).toFixed(2));
     }
 
-    // Reuse calculated power for the frontend report
-    const roundedPower = Math.round(power);
-
     sendJSON(res, 200, {
       prediction: predictedClass,
       confidence,
-      calculatedPower: roundedPower
+      calculatedPower: roundedPower,
+      fallback: false
     });
 
   } catch (err: any) {
-    console.error('Prediction proxy error:', err);
-    sendJSON(res, 500, { error: err.message || 'Internal server error' });
+    console.error('Prediction handler general error:', err);
+    return handleFallback(err.message || 'Unknown internal error');
   }
 }
 

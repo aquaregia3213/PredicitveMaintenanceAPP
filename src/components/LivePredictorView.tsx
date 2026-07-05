@@ -163,7 +163,9 @@ export default function LivePredictorView({
         failurePrediction: result.prediction,
         confidence: result.confidence,
         riskLevel: details.risk,
-        suggestedAction: details.action
+        suggestedAction: details.action,
+        fallback: result.fallback,
+        fallbackReason: result.fallbackReason
       };
       
       addPredictionLog(newResult);
@@ -792,6 +794,18 @@ export default function LivePredictorView({
                     </span>
                   </div>
 
+                  {activeResult.fallback && (
+                    <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-500 text-amber-850 dark:text-amber-300 text-[11px] font-mono leading-relaxed flex items-start gap-2 rounded-none text-left">
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                      <div>
+                        <span className="font-bold">LOCAL FALLBACK MODE ACTIVE</span>
+                        <p className="mt-0.5 opacity-90 text-[10px]">
+                          {activeResult.fallbackReason || 'Switched to local physical rules model due to Watson ML resource constraints.'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="pt-6 space-y-5 text-center">
                     {activeResult.failurePrediction === 'No Failure' ? (
                       /* Healthy Outcome */
@@ -960,13 +974,20 @@ export default function LivePredictorView({
                     <td className="p-3 font-mono text-[#121212]">{log.inputs.torque} Nm</td>
                     <td className="p-3 font-mono text-[#121212]">{log.inputs.toolWear} min</td>
                     <td className="p-3 font-mono">
-                      <span className={`px-2 py-0.5 border text-[10px] font-bold ${
-                        log.failurePrediction === 'No Failure'
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-800/30'
-                          : 'bg-red-50 text-red-800 border-red-800/30'
-                      }`}>
-                        {log.failurePrediction}
-                      </span>
+                      <div className="flex flex-col gap-1 items-start">
+                        <span className={`px-2 py-0.5 border text-[10px] font-bold ${
+                          log.failurePrediction === 'No Failure'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-800/30'
+                            : 'bg-red-50 text-red-800 border-red-800/30'
+                        }`}>
+                          {log.failurePrediction}
+                        </span>
+                        {log.fallback && (
+                          <span className="text-[9px] text-amber-700 font-mono font-bold tracking-tight uppercase flex items-center gap-0.5">
+                            ⚠️ Local
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3 text-right font-mono font-bold text-[#121212]">{log.confidence}%</td>
                   </tr>
