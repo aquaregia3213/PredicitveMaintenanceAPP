@@ -777,6 +777,48 @@ export default function LivePredictorView({
                {/* Right Hand: AI Diagnostic Outcome Panel */}
         <div className="lg:col-span-5 flex flex-col space-y-6">
           
+          {/* Active Spindle Asset Visualizer */}
+          <div className="bg-white p-3 border border-[#121212] shadow-[4px_4px_0px_0px_#121212] relative overflow-hidden flex flex-col justify-between">
+            <div className="absolute top-0 left-0 right-0 h-[3px] bg-[#121212]" />
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-mono uppercase text-[#121212]/60 tracking-wider">Asset Simulation Model</span>
+              <span className={`px-2 py-0.5 border text-[9px] font-mono font-bold ${
+                activePreset === 'normal' 
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-800' 
+                  : activePreset === 'custom' 
+                    ? 'bg-blue-50 text-blue-800 border-blue-800'
+                    : 'bg-red-50 text-red-800 border-red-800 animate-pulse'
+              }`}>
+                {activePreset.toUpperCase()} STATE
+              </span>
+            </div>
+
+            <div className="relative border border-[#121212]/10 overflow-hidden bg-zinc-950 flex justify-center items-center h-48">
+              <img 
+                src="/robotic_assembly_hud.png" 
+                alt="Active Industrial Asset Simulator" 
+                className="w-full h-full object-cover opacity-85 hover:scale-105 transition-transform duration-500"
+              />
+              
+              {/* Telemetry data overlay HUD */}
+              <div className="absolute bottom-2 left-2 bg-[#121212]/85 backdrop-blur-[2px] p-2 border border-white/20 text-[9px] font-mono text-white/90 space-y-0.5 rounded-none pointer-events-none">
+                <div>[SPINDLE SPEED: {sensors.rpm} RPM]</div>
+                <div>[TORQUE: {sensors.torque.toFixed(1)} NM]</div>
+                <div>[TEMP: {sensors.processTemp.toFixed(1)} K]</div>
+                <div>[WEAR: {sensors.toolWear} MIN]</div>
+              </div>
+
+              {/* Status Warning HUD highlight overlay */}
+              {activePreset !== 'normal' && activePreset !== 'custom' && (
+                <div className="absolute inset-0 bg-red-900/15 border-2 border-red-500/50 flex flex-col items-center justify-center pointer-events-none animate-pulse">
+                  <div className="bg-[#121212]/95 border border-red-500 p-2 text-red-500 text-[10px] font-mono font-bold uppercase tracking-wider text-center shadow-lg">
+                    ⚠️ {activePreset === 'hdf' ? 'HEAT FLOW BREACH' : activePreset.startsWith('pwf') ? 'POWER OVERLOAD' : activePreset === 'osf' ? 'FATIGUE OVERLOAD' : 'TOOL LIFE EXCEEDED'}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
           <div className="bg-white p-6 border border-[#121212] shadow-[4px_4px_0px_0px_#121212] flex-1 flex flex-col justify-between overflow-hidden relative rounded-none">
             
             <AnimatePresence>

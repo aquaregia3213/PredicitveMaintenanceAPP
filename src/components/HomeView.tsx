@@ -284,6 +284,66 @@ export default function HomeView({ setActiveTab }: HomeViewProps) {
         </div>
       </section>
 
+      {/* 3.5 Spindle Telemetry Showcase */}
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        <motion.div variants={itemVariants} className="lg:col-span-5 relative">
+          <div className="bg-white p-3 border border-[#121212] shadow-[5px_5px_0px_0px_#121212] overflow-hidden">
+            <img 
+              src="/cnc_machining_hud.png" 
+              alt="High-Tech CNC Spindle Milling Telemetry Mapping" 
+              className="w-full h-auto object-cover border border-[#121212]/10"
+            />
+            <div className="mt-3 text-[10px] font-mono text-center text-[#121212]/60 uppercase tracking-wider">
+              Fig 1.1: Live CNC Spindle sensor calibration overlay
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div variants={itemVariants} className="lg:col-span-7 space-y-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#121212]/5 border border-[#121212] text-[10px] font-mono uppercase tracking-widest text-[#121212] font-bold">
+            <span>Hardware Diagnostics mapping</span>
+          </div>
+
+          <h2 className="font-serif text-3xl font-bold tracking-tight text-[#121212]">
+            Mapping Telemetry to Physical Components
+          </h2>
+
+          <p className="text-sm text-[#121212]/80 leading-relaxed">
+            PredictX bridges the gap between high-frequency digital sensors and physical spindle stress. Telemetry coordinates mapped directly to mechanical failure zones:
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-4 bg-white border border-[#121212] space-y-2">
+              <h4 className="font-serif font-bold text-sm text-[#121212]">1. Cutting Spindle Assembly</h4>
+              <p className="text-xs text-[#121212]/70 leading-normal">
+                Monitors <strong>Rotational Speed (RPM)</strong> and <strong>Torque (Nm)</strong>. Power anomalies trigger boundary alarms if the drive pulls too much current or stalls.
+              </p>
+            </div>
+            
+            <div className="p-4 bg-white border border-[#121212] space-y-2">
+              <h4 className="font-serif font-bold text-sm text-[#121212]">2. Thermal Dissipation Jacket</h4>
+              <p className="text-xs text-[#121212]/70 leading-normal">
+                Compares <strong>Air Temperature</strong> (ambient) with <strong>Process Temperature</strong> (housing jacket). Insufficient thermal flow yields Heat Dissipation Failure (HDF).
+              </p>
+            </div>
+
+            <div className="p-4 bg-white border border-[#121212] space-y-2">
+              <h4 className="font-serif font-bold text-sm text-[#121212]">3. Cutter Head & Tooling Insert</h4>
+              <p className="text-xs text-[#121212]/70 leading-normal">
+                Tracks cumulative <strong>Tool Wear time (minutes)</strong>. Standard inserts undergo continuous degradation, resulting in eventual Tool Wear Failure (TWF).
+              </p>
+            </div>
+
+            <div className="p-4 bg-white border border-[#121212] space-y-2">
+              <h4 className="font-serif font-bold text-sm text-[#121212]">4. Mechanical Strain Limits</h4>
+              <p className="text-xs text-[#121212]/70 leading-normal">
+                Detects <strong>Overstrain Failure (OSF)</strong> by evaluating the torque-to-wear load product against machine rating thresholds.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      </section>
+
       {/* 4. Problem Statement & Cost Savings Section */}
       <motion.section 
         variants={itemVariants} 
