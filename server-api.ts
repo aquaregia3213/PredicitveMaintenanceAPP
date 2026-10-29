@@ -2,9 +2,15 @@ import fs from 'fs';
 import path from 'path';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { GoogleGenAI } from '@google/genai';
+import {
+  evaluateLocalMLModel,
+  generateOfflineCopilotBriefing,
+  getAnalyticsData
+} from './src/utils/mlEngine';
 
-function parseKeys() {
-  // Support cloud deployments via Environment Variables first
+export { evaluateLocalMLModel, generateOfflineCopilotBriefing, getAnalyticsData };
+
+function parseKeys(): { apiKey?: string; endpoint?: string; geminiKey?: string } {
   const ibmKeyEnv = process.env.IBM_KEY;
   const publicEndpointEnv = process.env.PUBLIC_ENDPOINT;
   const geminiKeyEnv = process.env.GEMINI_API_KEY;
@@ -19,21 +25,27 @@ function parseKeys() {
 
   const keysPath = path.join(process.cwd(), 'keys.txt');
   if (!fs.existsSync(keysPath)) {
-    throw new Error('IBM credentials missing: Set IBM_KEY and PUBLIC_ENDPOINT env variables or create keys.txt at root');
+    return {
+      geminiKey: geminiKeyEnv ? geminiKeyEnv.trim() : undefined
+    };
   }
-  const content = fs.readFileSync(keysPath, 'utf8');
-  const keyMatch = content.match(/ibm key\s*-\s*([^\r\n]+)/);
-  const endpointMatch = content.match(/public endpoint\s*-\s*([^\r\n]+)/);
-  const geminiMatch = content.match(/gemini key\s*-\s*([^\r\n]+)/);
 
-  if (!keyMatch || !endpointMatch) {
-    throw new Error('keys.txt has invalid format');
+  try {
+    const content = fs.readFileSync(keysPath, 'utf8');
+    const keyMatch = content.match(/ibm key\s*-\s*([^\r\n]+)/);
+    const endpointMatch = content.match(/public endpoint\s*-\s*([^\r\n]+)/);
+    const geminiMatch = content.match(/gemini key\s*-\s*([^\r\n]+)/);
+
+    return {
+      apiKey: keyMatch ? keyMatch[1].trim() : undefined,
+      endpoint: endpointMatch ? endpointMatch[1].trim() : undefined,
+      geminiKey: geminiMatch ? geminiMatch[1].trim() : (geminiKeyEnv ? geminiKeyEnv.trim() : undefined)
+    };
+  } catch {
+    return {
+      geminiKey: geminiKeyEnv ? geminiKeyEnv.trim() : undefined
+    };
   }
-  return {
-    apiKey: keyMatch[1].trim(),
-    endpoint: endpointMatch[1].trim(),
-    geminiKey: geminiMatch ? geminiMatch[1].trim() : (geminiKeyEnv ? geminiKeyEnv.trim() : undefined)
-  };
 }
 
 let cachedToken: string | null = null;
@@ -50,7 +62,8 @@ async function getAccessToken(apiKey: string) {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': 'application/json'
     },
-    body: `grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${apiKey}`
+    body: `grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${apiKey}`,
+    signal: AbortSignal.timeout(4000)
   });
   if (!res.ok) {
     const text = await res.text();
@@ -89,50 +102,18 @@ function sendJSON(res: ServerResponse, status: number, data: any) {
   res.end(JSON.stringify(data));
 }
 
-// Pre-computed dataset metrics to eliminate runtime CSV file reading dependency
-function getAnalyticsData() {
-  return {
-    ALL: {
-      total: 10000,
-      normal: 9652,
-      failures: 348,
-      hdf: 112,
-      pwf: 95,
-      twf: 45,
-      osf: 78,
-      rnf: 18
-    },
-    H: {
-      total: 1003,
-      normal: 979,
-      failures: 24,
-      hdf: 8,
-      pwf: 5,
-      twf: 6,
-      osf: 1,
-      rnf: 4
-    },
-    M: {
-      total: 2997,
-      normal: 2916,
-      failures: 81,
-      hdf: 30,
-      pwf: 31,
-      twf: 14,
-      osf: 4,
-      rnf: 2
-    },
-    L: {
-      total: 6000,
-      normal: 5757,
-      failures: 243,
-      hdf: 74,
-      pwf: 59,
-      twf: 25,
-      osf: 73,
-      rnf: 12
-    }
-  };
+export async function analyticsHandler(req: IncomingMessage, res: ServerResponse) {
+  if (req.method !== 'GET') {
+    return sendJSON(res, 405, { error: 'Method not allowed' });
+  }
+
+  try {
+    const stats = getAnalyticsData();
+    sendJSON(res, 200, stats);
+  } catch (err: any) {
+    console.error('Analytics parsing error:', err);
+    sendJSON(res, 500, { error: err.message || 'Internal server error' });
+  }
 }
 
 export async function predictHandler(req: IncomingMessage, res: ServerResponse) {
@@ -140,62 +121,59 @@ export async function predictHandler(req: IncomingMessage, res: ServerResponse) 
     return sendJSON(res, 405, { error: 'Method not allowed' });
   }
 
-  let body;
+  let body: any;
   try {
     body = await getBody(req);
   } catch (err: any) {
     return sendJSON(res, 400, { error: 'Invalid JSON in request body' });
   }
 
-  const { machineType, airTemp, processTemp, rpm, torque, toolWear } = body;
+  const { machineType, airTemp, processTemp, rpm, torque, toolWear, useIBMCloud } = body;
   if (!machineType || airTemp === undefined || processTemp === undefined || rpm === undefined || torque === undefined || toolWear === undefined) {
     return sendJSON(res, 400, { error: 'Missing required sensor fields' });
   }
 
-  const diffTemp = processTemp - airTemp;
-  const power = torque * (rpm * 2 * Math.PI / 60);
-  const overstrainFactor = toolWear * torque;
-  const threshold = machineType === 'H' ? 13000 : machineType === 'M' ? 12000 : 11000;
-  const roundedPower = Math.round(power);
+  // 1. Evaluate Local ML Model
+  const localResult = evaluateLocalMLModel(
+    machineType as 'H' | 'M' | 'L',
+    Number(airTemp),
+    Number(processTemp),
+    Number(rpm),
+    Number(torque),
+    Number(toolWear)
+  );
 
-  const localPrediction = (() => {
-    if (toolWear >= 200) return 'Tool Wear Failure';
-    if (overstrainFactor > threshold) return 'Overstrain Failure';
-    if (diffTemp < 8.6 && rpm < 1380) return 'Heat Dissipation Failure';
-    if (power < 3500 || power > 9000) return 'Power Failure';
-    return 'No Failure';
-  })();
+  // Check if IBM Cloud was explicitly requested (e.g. via USE_IBM_CLOUD env or request body flag)
+  const shouldAttemptIBM = process.env.USE_IBM_CLOUD === 'true' || useIBMCloud === true;
 
-  const handleFallback = (reason: string) => {
-    console.warn(`[Live Predictor] Fallback triggered: ${reason}`);
+  if (!shouldAttemptIBM) {
+    // Return high-speed local ML inference directly (0ms, 100% free forever)
     return sendJSON(res, 200, {
-      prediction: localPrediction,
-      confidence: 99.6,
-      calculatedPower: roundedPower,
-      fallback: true,
-      fallbackReason: reason
+      prediction: localResult.prediction,
+      confidence: localResult.confidence,
+      calculatedPower: localResult.calculatedPower,
+      probabilities: localResult.probabilities,
+      engine: 'AutoAI Snap Random Forest (Local Offline Engine)',
+      fallback: false
     });
-  };
+  }
 
+  // If user explicitly configured IBM Cloud, try IBM Cloud with strict fallback
   try {
-    let apiKey: string, endpoint: string;
-    try {
-      const keys = parseKeys();
-      apiKey = keys.apiKey;
-      endpoint = keys.endpoint;
-    } catch (err: any) {
-      return handleFallback(`IBM credentials config error: ${err.message}`);
+    const keys = parseKeys();
+    if (!keys.apiKey || !keys.endpoint) {
+      return sendJSON(res, 200, {
+        prediction: localResult.prediction,
+        confidence: localResult.confidence,
+        calculatedPower: localResult.calculatedPower,
+        probabilities: localResult.probabilities,
+        engine: 'AutoAI Local Engine',
+        fallback: true,
+        fallbackReason: 'IBM Cloud credentials missing in keys.txt'
+      });
     }
 
-    let token: string;
-    try {
-      token = await getAccessToken(apiKey);
-    } catch (err: any) {
-      return handleFallback(`IBM Cloud authentication failed: ${err.message}`);
-    }
-
-    const isFailure = localPrediction !== 'No Failure';
-    const target = isFailure ? 1 : 0;
+    const token = await getAccessToken(keys.apiKey);
     const udi = Math.floor(1 + Math.random() * 9999);
     const productId = `${machineType}${10000 + Math.floor(Math.random() * 90000)}`;
 
@@ -203,69 +181,61 @@ export async function predictHandler(req: IncomingMessage, res: ServerResponse) 
       input_data: [
         {
           fields: [
-            "UDI",
-            "Product ID",
-            "Type",
-            "Air temperature [K]",
-            "Process temperature [K]",
-            "Rotational speed [rpm]",
-            "Torque [Nm]",
-            "Tool wear [min]",
-            "Target"
+            "UDI", "Product ID", "Type", "Air temperature [K]",
+            "Process temperature [K]", "Rotational speed [rpm]",
+            "Torque [Nm]", "Tool wear [min]", "Target"
           ],
           values: [
-            [udi, productId, machineType, airTemp, processTemp, rpm, torque, toolWear, target]
+            [udi, productId, machineType, airTemp, processTemp, rpm, torque, toolWear, localResult.prediction !== 'No Failure' ? 1 : 0]
           ]
         }
       ]
     };
 
-    let predictRes;
-    try {
-      predictRes = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-    } catch (err: any) {
-      return handleFallback(`Network error contacting watsonx.ai: ${err.message}`);
-    }
+    const predictRes = await fetch(keys.endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(4000)
+    });
 
     if (!predictRes.ok) {
       const errText = await predictRes.text();
-      let cleanReason = `Watson ML API error: ${predictRes.statusText}`;
+      let cleanReason = `watsonx.ai status: ${predictRes.statusText}`;
       if (
         predictRes.status === 402 || 
         predictRes.status === 403 || 
         predictRes.status === 429 ||
+        predictRes.status === 503 ||
         errText.toLowerCase().includes("limit") ||
         errText.toLowerCase().includes("cuh") ||
         errText.toLowerCase().includes("quota") ||
-        errText.toLowerCase().includes("exhausted")
+        errText.toLowerCase().includes("upstream")
       ) {
-        cleanReason = "watsonx.ai Capacity Unit Hours (CUH) limit or service quota exhausted.";
-      } else if (errText) {
-        try {
-          const parsed = JSON.parse(errText);
-          if (parsed.message) cleanReason = `Watson ML: ${parsed.message}`;
-          else if (parsed.error && parsed.error.message) cleanReason = `Watson ML: ${parsed.error.message}`;
-        } catch {}
+        cleanReason = "watsonx.ai capacity exhausted or service unavailable.";
       }
-      return handleFallback(cleanReason);
+      return sendJSON(res, 200, {
+        prediction: localResult.prediction,
+        confidence: localResult.confidence,
+        calculatedPower: localResult.calculatedPower,
+        probabilities: localResult.probabilities,
+        engine: 'AutoAI Local Engine (Fallback)',
+        fallback: true,
+        fallbackReason: cleanReason
+      });
     }
 
     const predictData = await predictRes.json() as any;
-    
     if (
       !predictData.predictions ||
       !predictData.predictions[0] ||
       !predictData.predictions[0].values ||
       !predictData.predictions[0].values[0]
     ) {
-      return handleFallback('Unexpected Watson ML response format');
+      throw new Error('Unexpected IBM Watson response format');
     }
 
     const predictedClass = predictData.predictions[0].values[0][0];
@@ -286,30 +256,26 @@ export async function predictHandler(req: IncomingMessage, res: ServerResponse) 
       confidence = parseFloat((rawProbabilities[classIndex] * 100).toFixed(2));
     }
 
-    sendJSON(res, 200, {
+    return sendJSON(res, 200, {
       prediction: predictedClass,
       confidence,
-      calculatedPower: roundedPower,
+      calculatedPower: localResult.calculatedPower,
+      probabilities: localResult.probabilities,
+      engine: 'IBM watsonx.ai Cloud WML',
       fallback: false
     });
 
   } catch (err: any) {
-    console.error('Prediction handler general error:', err);
-    return handleFallback(err.message || 'Unknown internal error');
-  }
-}
-
-export async function analyticsHandler(req: IncomingMessage, res: ServerResponse) {
-  if (req.method !== 'GET') {
-    return sendJSON(res, 405, { error: 'Method not allowed' });
-  }
-
-  try {
-    const stats = getAnalyticsData();
-    sendJSON(res, 200, stats);
-  } catch (err: any) {
-    console.error('Analytics parsing error:', err);
-    sendJSON(res, 500, { error: err.message || 'Internal server error' });
+    console.warn(`[Live Predictor] Fallback to Local Engine: ${err.message}`);
+    return sendJSON(res, 200, {
+      prediction: localResult.prediction,
+      confidence: localResult.confidence,
+      calculatedPower: localResult.calculatedPower,
+      probabilities: localResult.probabilities,
+      engine: 'AutoAI Local Engine (Fallback)',
+      fallback: true,
+      fallbackReason: err.message
+    });
   }
 }
 
@@ -318,7 +284,7 @@ export async function explainHandler(req: IncomingMessage, res: ServerResponse) 
     return sendJSON(res, 405, { error: 'Method not allowed' });
   }
 
-  let body;
+  let body: any;
   try {
     body = await getBody(req);
   } catch (err: any) {
@@ -339,33 +305,25 @@ export async function explainHandler(req: IncomingMessage, res: ServerResponse) 
     return sendJSON(res, 400, { error: 'Missing required sensor or prediction fields' });
   }
 
-  // Get Gemini API key
+  // Get Gemini API key if present
   let geminiKey: string | undefined;
   try {
     const keys = parseKeys();
     geminiKey = keys.geminiKey;
-  } catch (err: any) {
-    // If keys.txt parsing failed or config error
-  }
+  } catch {}
 
-  // If not found in keys.txt, look at process.env.GEMINI_API_KEY
-  if (!geminiKey || geminiKey === 'YOUR_GEMINI_API_KEY') {
+  if (!geminiKey || geminiKey === 'YOUR_GEMINI_API_KEY' || !geminiKey.startsWith('AIzaSy')) {
     geminiKey = process.env.GEMINI_API_KEY;
   }
 
-  if (!geminiKey) {
-    return sendJSON(res, 400, {
-      error: 'Gemini API key is not configured.',
-      details: 'Please set the GEMINI_API_KEY environment variable or add "gemini key - <your-key>" to keys.txt at the root of the project.'
-    });
-  }
+  // If valid Gemini key exists, try calling Gemini API; otherwise use offline generator
+  if (geminiKey && geminiKey.startsWith('AIzaSy')) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: geminiKey });
+      const diffTemp = (processTemp - airTemp).toFixed(1);
+      const power = Math.round(torque * (rpm * 2 * Math.PI / 60));
 
-  try {
-    const ai = new GoogleGenAI({ apiKey: geminiKey });
-    const diffTemp = (processTemp - airTemp).toFixed(1);
-    const power = Math.round(torque * (rpm * 2 * Math.PI / 60));
-
-    const prompt = `
+      const prompt = `
 You are an expert industrial CNC maintenance and reliability engineer.
 Analyze the following CNC spindle telemetry readings and classification prediction to generate a comprehensive, highly actionable diagnostic and mitigation report.
 
@@ -393,16 +351,29 @@ Provide your response in structured markdown with the following sections:
 Be precise, highly technical yet readable for field operators, and keep the tone professional and authoritative.
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+      });
 
-    const explanation = response.text;
-    return sendJSON(res, 200, { explanation });
-
-  } catch (err: any) {
-    console.error('Gemini explanation error:', err);
-    return sendJSON(res, 500, { error: `Gemini API error: ${err.message}` });
+      const explanation = response.text;
+      return sendJSON(res, 200, { explanation });
+    } catch (err: any) {
+      console.warn('Gemini API call failed, using offline briefing generator:', err.message);
+    }
   }
+
+  // High-reliability offline expert briefing
+  const explanation = generateOfflineCopilotBriefing(
+    machineType,
+    airTemp,
+    processTemp,
+    rpm,
+    torque,
+    toolWear,
+    prediction,
+    confidence
+  );
+
+  return sendJSON(res, 200, { explanation });
 }

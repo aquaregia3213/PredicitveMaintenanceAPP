@@ -7,6 +7,7 @@ import {
   Settings, Layers, Cpu, Database, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { evaluateLocalMLModel, generateOfflineCopilotBriefing } from '../utils/mlEngine';
 
 interface LivePredictorViewProps {
   predictionLogs: PredictionResult[];
@@ -145,20 +146,35 @@ export default function LivePredictorView({
     setCopilotExplanation(null);
     setCopilotError(null);
     try {
-      const response = await fetch('/api/predict', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(sensors)
-      });
+      let result: any = null;
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Watson ML prediction request failed');
+      try {
+        const response = await fetch('/api/predict', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(sensors)
+        });
+
+        if (response.ok) {
+          result = await response.json();
+        }
+      } catch (e) {
+        // Fall through to direct local evaluation (e.g. Netlify static hosting)
       }
 
-      const result = await response.json();
+      // If backend was unreachable or returned error, evaluate in-browser with AutoAI engine
+      if (!result || !result.prediction) {
+        result = evaluateLocalMLModel(
+          sensors.machineType,
+          sensors.airTemp,
+          sensors.processTemp,
+          sensors.rpm,
+          sensors.torque,
+          sensors.toolWear
+        );
+      }
       
       const calculatedPower = result.calculatedPower || 0;
       const details = getFailureDetails(result.prediction, calculatedPower);
@@ -189,30 +205,48 @@ export default function LivePredictorView({
     setCopilotLoading(true);
     setCopilotError(null);
     try {
-      const response = await fetch('/api/explain', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          machineType: activeResult.inputs.machineType,
-          airTemp: activeResult.inputs.airTemp,
-          processTemp: activeResult.inputs.processTemp,
-          rpm: activeResult.inputs.rpm,
-          torque: activeResult.inputs.torque,
-          toolWear: activeResult.inputs.toolWear,
-          prediction: activeResult.failurePrediction,
-          confidence: activeResult.confidence
-        })
-      });
+      let explanation: string | null = null;
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to fetch explanation from Gemini API');
+      try {
+        const response = await fetch('/api/explain', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            machineType: activeResult.inputs.machineType,
+            airTemp: activeResult.inputs.airTemp,
+            processTemp: activeResult.inputs.processTemp,
+            rpm: activeResult.inputs.rpm,
+            torque: activeResult.inputs.torque,
+            toolWear: activeResult.inputs.toolWear,
+            prediction: activeResult.failurePrediction,
+            confidence: activeResult.confidence
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          explanation = data.explanation;
+        }
+      } catch (e) {
+        // Fall through to direct local briefing generator
       }
 
-      const data = await response.json();
-      setCopilotExplanation(data.explanation);
+      if (!explanation) {
+        explanation = generateOfflineCopilotBriefing(
+          activeResult.inputs.machineType,
+          activeResult.inputs.airTemp,
+          activeResult.inputs.processTemp,
+          activeResult.inputs.rpm,
+          activeResult.inputs.torque,
+          activeResult.inputs.toolWear,
+          activeResult.failurePrediction,
+          activeResult.confidence
+        );
+      }
+
+      setCopilotExplanation(explanation);
     } catch (err: any) {
       console.error('Explanation failed:', err);
       setCopilotError(err.message || 'An error occurred while generating explanation.');
@@ -546,12 +580,12 @@ export default function LivePredictorView({
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#121212] dark:border-white/20 pb-6">
         <div>
           <h2 className="font-serif text-3xl font-bold tracking-tight text-[#121212] dark:text-white">Live Prediction Console</h2>
-          <p className="text-[#121212]/70 dark:text-white/60 text-sm">Fine-tune machine sensor inputs and query the live IBM watsonx.ai AutoAI endpoint.</p>
+          <p className="text-[#121212]/70 dark:text-white/60 text-sm">Fine-tune machine sensor inputs and query the AutoAI predictive maintenance diagnostic engine.</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
           <span className="text-[10px] font-mono uppercase tracking-widest font-bold text-[#121212] dark:text-white bg-[#121212]/5 dark:bg-white/10 px-3 py-1.5 rounded-none border border-[#121212] dark:border-white/30">
-            AutoAI Pipeline 5 · Live
+            AutoAI Pipeline 5 · Offline Engine Active
           </span>
         </div>
       </div>
@@ -764,7 +798,7 @@ export default function LivePredictorView({
               {isDiagnosing ? (
                 <>
                   <span className="h-4 w-4 border-2 border-[#121212]/30 border-t-[#121212] rounded-full animate-spin" />
-                  <span>watsonx.ai Analyzing...</span>
+                  <span>AI Engine Analyzing...</span>
                 </>
               ) : (
                 <>
@@ -835,9 +869,9 @@ export default function LivePredictorView({
                     <Cpu className="h-8 w-8 text-[#121212]" />
                   </div>
                   <div className="space-y-2 text-center">
-                    <h4 className="font-serif font-bold text-lg text-[#121212] dark:text-white">Contacting watsonx.ai Endpoint</h4>
+                    <h4 className="font-serif font-bold text-lg text-[#121212] dark:text-white">Executing AutoAI Diagnostic Engine</h4>
                     <p className="text-xs text-[#121212]/70 dark:text-white/50 max-w-xs leading-relaxed">
-                      Querying AutoAI Pipeline 5 XGBoost Champion classifier. Please wait...
+                      Evaluating sensor dynamics against AutoAI Pipeline 5 decision boundaries...
                     </p>
                   </div>
                   <div className="w-48 bg-[#EFECE8] border border-[#121212]/30 h-2 rounded-none overflow-hidden">

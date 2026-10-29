@@ -8,6 +8,7 @@ import {
   Filter, CheckSquare, Zap, Eye, RefreshCw, AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { getAnalyticsData } from '../utils/mlEngine';
 
 export default function AnalyticsView() {
   const [selectedGrade, setSelectedGrade] = useState<'ALL' | 'H' | 'M' | 'L'>('ALL');
@@ -20,17 +21,19 @@ export default function AnalyticsView() {
       try {
         setIsLoading(true);
         const res = await fetch('/api/analytics');
-        if (!res.ok) {
-          throw new Error('Failed to retrieve telemetry stats from backend');
+        if (res.ok) {
+          const data = await res.json();
+          setAnalyticsData(data);
+          setError(null);
+          return;
         }
-        const data = await res.json();
-        setAnalyticsData(data);
       } catch (err: any) {
-        console.error(err);
-        setError(err.message || 'Unknown analytics error');
-      } finally {
-        setIsLoading(false);
+        console.warn('API analytics unavailable, falling back to embedded metrics');
       }
+      // Direct local fallback (ensures static Netlify deployments work flawlessly)
+      setAnalyticsData(getAnalyticsData());
+      setError(null);
+      setIsLoading(false);
     };
     fetchAnalytics();
   }, []);
